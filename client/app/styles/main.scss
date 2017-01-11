@@ -51,13 +51,15 @@ $terminal-header-height: 44px;
 $node-opacity-blurred: 0.25;
 $node-highlight-fill-opacity: 0.1;
 $node-highlight-stroke-opacity: 0.4;
-$node-highlight-stroke-width: 1px;
-$node-border-stroke-width: 2.5px;
+$node-highlight-stroke-width: 0.02;
+$node-border-stroke-width: 0.06;
 $node-pseudo-opacity: 0.8;
+$node-text-scale: 0.02;
+$node-labels-max-width: 100px;
 $edge-highlight-opacity: 0.1;
 $edge-opacity-blurred: 0.2;
 $edge-opacity: 0.5;
-$edge-link-stroke-width: 1px;
+$edge-link-stroke-width: 0.5;
 
 $btn-opacity-default: 0.7;
 $btn-opacity-hover: 1;
@@ -357,7 +359,7 @@ $label-background-color: fade-out($background-average-color, .3);
     fill: $text-secondary-color;
   }
 
-  .nodes-chart-nodes > .node {
+  .nodes-chart-nodes .node {
     transition: opacity .5s $base-ease;
     text-align: center;
 
@@ -372,6 +374,14 @@ $label-background-color: fade-out($background-average-color, .3);
 
     .node-label {
       color: $text-color;
+    }
+
+    .node-labels-container {
+      transform: scale($node-text-scale);
+      pointer-events: none;
+      height: 5em;
+      x: -0.5 * $node-labels-max-width;
+      width: $node-labels-max-width;
     }
 
     .node-label-wrapper {
@@ -394,6 +404,9 @@ $label-background-color: fade-out($background-average-color, .3);
       vertical-align: top;
 
       cursor: pointer;
+      pointer-events: all;
+      font-size: 12px;
+      width: 100%;
     }
 
     .node-sublabel {
@@ -402,7 +415,6 @@ $label-background-color: fade-out($background-average-color, .3);
     }
 
     .node-label, .node-sublabel {
-
       span {
         border-radius: 2px;
       }
@@ -476,7 +488,7 @@ $label-background-color: fade-out($background-average-color, .3);
     }
     .shadow {
       stroke: $weave-blue;
-      stroke-width: 10px;
+      stroke-width: 10 * $edge-link-stroke-width;
       fill: none;
       stroke-opacity: 0;
     }
@@ -491,7 +503,7 @@ $label-background-color: fade-out($background-average-color, .3);
     display: none;
   }
 
-  .stack .onlyHighlight .shape  {
+  .stack .highlight .shape  {
     .border { display: none; }
     .shadow { display: none; }
     .node { display: none; }
@@ -503,11 +515,9 @@ $label-background-color: fade-out($background-average-color, .3);
   }
 
   .shape {
-    transform: scale(1);
     cursor: pointer;
 
-    /* cloud paths have stroke-width set dynamically */
-    &:not(.shape-cloud) .border {
+    .border {
       stroke-width: $node-border-stroke-width;
       fill: $background-color;
       transition: stroke-opacity 0.333s $base-ease, fill 0.333s $base-ease;
@@ -533,10 +543,11 @@ $label-background-color: fade-out($background-average-color, .3);
     .node {
       fill: $text-color;
       stroke: $background-lighter-color;
-      stroke-width: 2px;
+      stroke-width: 0.05;
     }
 
     text {
+      transform: scale($node-text-scale);
       font-size: 12px;
       dominant-baseline: middle;
       text-anchor: middle;
@@ -552,7 +563,7 @@ $label-background-color: fade-out($background-average-color, .3);
   }
 
   .stack .shape .border {
-    stroke-width: $node-border-stroke-width - 0.5;
+    stroke-width: $node-border-stroke-width * 0.8;
   }
 
 }
