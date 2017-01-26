@@ -62,10 +62,6 @@ export const restoredZoomState = createSelector(
   [
     cachedZoomStateSelector,
     defaultZoomSelector,
-    topologyIdSelector,
   ],
-  (cachedZoomState, defaultZoomState, topologyId) => {
-    console.log(topologyId, cachedZoomState, defaultZoomState);
-    return cachedZoomState || defaultZoomState;
-  }
+  (cachedZoomState, defaultZoomState) => cachedZoomState || defaultZoomState
 );

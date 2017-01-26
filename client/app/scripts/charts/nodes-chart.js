@@ -18,23 +18,11 @@ import { getActiveTopologyOptions } from '../utils/topology-utils';
 
 import { restoredZoomState } from '../selectors/nodes-chart-zoom';
 import { selectedNodeInFocus } from '../selectors/nodes-chart-focus';
-import { updatedLayout } from '../selectors/nodes-chart-layout';
+import { updatedLayout, restoredLayout } from '../selectors/nodes-chart-layout';
 
 const log = debug('scope:nodes-chart');
 const ZOOM_CACHE_FIELDS = ['scale', 'panTranslateX', 'panTranslateY', 'minScale', 'maxScale'];
 
-
-// const updatedState = createSelector(
-//   [
-//     (_, props) => props.forceRelayout,
-//     updatedLayout
-//   ],
-//   (forceRelayout) => {
-//     return {
-//       width: forceRelayout ?
-//     }
-//   }
-// );
 
 class NodesChart extends React.Component {
   constructor(props, context) {
@@ -77,13 +65,14 @@ class NodesChart extends React.Component {
     //   assign(state, emptyLayoutState);
     // }
 
-    if (nextProps.topologyId !== this.props.topologyId) {
+    if (nextProps.topologyId !== this.props.topologyId ||
+      this.props.selectedNodeId !== nextProps.selectedNodeId) {
       // saving previous zoom state
       const prevZoom = pick(state, ZOOM_CACHE_FIELDS);
       const zoomCache = assign({}, state.zoomCache);
       zoomCache[this.props.topologyId] = prevZoom;
       assign(state, { zoomCache });
-      console.log('Cached zoom', prevZoom);
+      // console.log('Cached zoom', prevZoom);
     }
 
     // reset layout dimensions only when forced
@@ -98,15 +87,13 @@ class NodesChart extends React.Component {
     assign(state, restoredZoomState(state, nextProps));
     // }
 
-    // if (this.props.selectedNodeId !== nextProps.selectedNodeId) {
-    //   // undo any pan/zooming that might have happened
-    //   this.setZoom(state);
-    //   assign(state, restoredLayout(state));
-    // }
-    //
-    // if (nextProps.selectedNodeId) {
-    //   assign(state, selectedNodeInFocus(nextProps, state));
-    // }
+    if (this.props.selectedNodeId !== nextProps.selectedNodeId) {
+      assign(state, restoredLayout(state));
+    }
+
+    if (nextProps.selectedNodeId) {
+      assign(state, selectedNodeInFocus(nextProps, state));
+    }
 
     this.setZoom(state);
     this.setState(state);
@@ -175,17 +162,11 @@ class NodesChart extends React.Component {
     this.isZooming = true;
     // don't pan while node is selected
     if (!this.props.selectedNodeId) {
-      const newZoom = {
+      this.setState({
         panTranslateX: d3Event.transform.x,
         panTranslateY: d3Event.transform.y,
         scale: d3Event.transform.k
-      };
-      this.setState(newZoom);
-      // const state = assign({}, this.state, newZoom);
-      // const zoomCache = assign({}, state.zoomCache);
-      // zoomCache[this.props.topologyId] = assign(zoomCache[this.props.topologyId], newZoom);
-      // assign(state, { zoomCache });
-      // this.setState(state);
+      });
     }
   }
 
