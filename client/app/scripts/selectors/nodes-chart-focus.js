@@ -17,7 +17,7 @@ const layoutNodesSelector = (state, _) => state.layoutNodes;
 const layoutEdgesSelector = (state, _) => state.layoutEdges;
 const stateWidthSelector = (state, _) => state.width;
 const stateHeightSelector = (state, _) => state.height;
-const stateScaleSelector = (state, _) => state.scale;
+const stateScaleSelector = (state, _) => state.zoomScale;
 const stateTranslateXSelector = (state, _) => state.panTranslateX;
 const stateTranslateYSelector = (state, _) => state.panTranslateY;
 const propsSelectedNodeIdSelector = (_, props) => props.selectedNodeId;

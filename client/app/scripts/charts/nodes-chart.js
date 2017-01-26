@@ -21,7 +21,11 @@ import { selectedNodeInFocus } from '../selectors/nodes-chart-focus';
 import { updatedLayout, restoredLayout } from '../selectors/nodes-chart-layout';
 
 const log = debug('scope:nodes-chart');
-const ZOOM_CACHE_FIELDS = ['scale', 'panTranslateX', 'panTranslateY', 'minScale', 'maxScale'];
+const GRAPH_COMPLEXITY_NODES_TRESHOLD = 100;
+const ZOOM_CACHE_FIELDS = [
+  'panTranslateX', 'panTranslateY',
+  'zoomScale', 'minZoomScale', 'maxZoomScale'
+];
 
 
 class NodesChart extends React.Component {
@@ -31,9 +35,9 @@ class NodesChart extends React.Component {
     this.state = {
       layoutNodes: makeMap(),
       layoutEdges: makeMap(),
-      scale: 0,
-      minScale: 0,
-      maxScale: 0,
+      zoomScale: 0,
+      minZoomScale: 0,
+      maxZoomScale: 0,
       panTranslateX: 0,
       panTranslateY: 0,
       selectedScale: 1,
@@ -51,16 +55,8 @@ class NodesChart extends React.Component {
   }
 
   componentWillReceiveProps(nextProps) {
-    const topologyChanged = nextProps.topologyId !== this.props.topologyId;
-    const nodeSelectionChanged = nextProps.selectedNodeId !== this.props.selectedNodeId;
-
     // gather state, setState should be called only once here
     const state = assign({}, this.state);
-
-    // saving previous zoom state
-    if (topologyChanged || nodeSelectionChanged) {
-      assign(state, this.cacheZoomState(state));
-    }
 
     // Reset layout dimensions only when forced (to prevent excessive rendering on resizing).
     state.height = nextProps.forceRelayout ? nextProps.height : (state.height || nextProps.height);
@@ -68,11 +64,6 @@ class NodesChart extends React.Component {
 
     assign(state, updatedLayout(state, nextProps));
     assign(state, restoredZoomState(state, nextProps));
-
-    // if (nodeSelectionChanged) {
-    //   assign(state, restoredLayout(state));
-    // }
-
     assign(state, selectedNodeInFocus(state, nextProps));
 
     this.setZoom(state);
@@ -99,15 +90,14 @@ class NodesChart extends React.Component {
   }
 
   isTopologyGraphComplex() {
-    return this.state.layoutNodes.size > 100;
+    return this.state.layoutNodes.size > GRAPH_COMPLEXITY_NODES_TRESHOLD;
   }
 
   render() {
-    const { panTranslateX, panTranslateY, scale } = this.state;
+    // Not passing transform into child components for perf reasons.
+    const { panTranslateX, panTranslateY, zoomScale } = this.state;
+    const transform = `translate(${panTranslateX}, ${panTranslateY}) scale(${zoomScale})`;
 
-    // Not passing translates into child components for perf reasons.
-    const translate = [panTranslateX, panTranslateY];
-    const transform = `translate(${translate}) scale(${scale})`;
     const svgClassNames = this.props.isEmpty ? 'hide' : '';
     const isAnimated = !this.isTopologyGraphComplex();
 
@@ -149,19 +139,27 @@ class NodesChart extends React.Component {
     this.isZooming = true;
     // don't pan while node is selected
     if (!this.props.selectedNodeId) {
-      this.setState({
+      const newZoomState = {
         panTranslateX: d3Event.transform.x,
         panTranslateY: d3Event.transform.y,
-        scale: d3Event.transform.k
-      });
+        zoomScale: d3Event.transform.k
+      };
+      let state = assign({}, this.state, newZoomState);
+      state = assign(state, this.cacheZoomState(state));
+      this.setState(state);
+      // this.setState({
+      //   panTranslateX: d3Event.transform.x,
+      //   panTranslateY: d3Event.transform.y,
+      //   zoomScale: d3Event.transform.k
+      // });
     }
   }
 
   setZoom(newZoom) {
-    this.zoom = this.zoom.scaleExtent([newZoom.minScale, newZoom.maxScale]);
+    this.zoom = this.zoom.scaleExtent([newZoom.minZoomScale, newZoom.maxZoomScale]);
     this.svg.call(this.zoom.transform, zoomIdentity
       .translate(newZoom.panTranslateX, newZoom.panTranslateY)
-      .scale(newZoom.scale));
+      .scale(newZoom.zoomScale));
   }
 }
 

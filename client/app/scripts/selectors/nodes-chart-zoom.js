@@ -43,15 +43,17 @@ const defaultZoomSelector = createSelector(
 
     const xFactor = width / (xMax - xMin);
     const yFactor = height / (yMax - yMin);
-    const scale = Math.min(xFactor, yFactor);
 
-    const translateX = (width - ((xMax + xMin) * scale)) / 2;
-    const translateY = (height - ((yMax + yMin) * scale)) / 2;
+    const maxZoomScale = Math.min(width, height) / NODE_BASE_SIZE / 3;
+    const zoomScale = Math.min(xFactor, yFactor, maxZoomScale) * 0.8;
+
+    const translateX = (width - ((xMax + xMin) * zoomScale)) / 2;
+    const translateY = (height - ((yMax + yMin) * zoomScale)) / 2;
 
     return {
-      scale,
-      minScale: scale / 5,
-      maxScale: Math.min(width, height) / NODE_BASE_SIZE / 3,
+      zoomScale,
+      maxZoomScale,
+      minZoomScale: zoomScale / 5,
       panTranslateX: translateX + margins.left,
       panTranslateY: translateY + margins.top,
     };
