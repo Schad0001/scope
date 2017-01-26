@@ -2,32 +2,36 @@ import { createSelector } from 'reselect';
 import { NODE_BASE_SIZE } from '../constants/styles';
 
 
+const layoutNodesSelector = (state, _) => state.layoutNodes;
+const stateWidthSelector = (state, _) => state.width;
+const stateHeightSelector = (state, _) => state.height;
+const propsMarginsSelector = (_, props) => props.margins;
+const topologyIdSelector = (_, props) => props.topologyId;
+const cachedZoomStateSelector = (state, props) => state.zoomCache[props.topologyId];
+
 const viewportWidthSelector = createSelector(
   [
-    (state, _) => state.width,
-    (_, props) => props.margins.left,
-    (_, props) => props.margins.right,
+    stateWidthSelector,
+    propsMarginsSelector,
   ],
-  (width, marginLeft, marginRight) => width - marginLeft - marginRight
+  (width, margins) => width - margins.left - margins.right
 );
 const viewportHeightSelector = createSelector(
   [
-    (state, _) => state.height,
-    (_, props) => props.margins.top,
-    (_, props) => props.margins.bottom,
+    stateHeightSelector,
+    propsMarginsSelector,
   ],
-  (height, marginTop, marginBottom) => height - marginTop - marginBottom
+  (height, margins) => height - margins.top - margins.bottom
 );
 
 const defaultZoomSelector = createSelector(
   [
-    (state, _) => state.nodes,
+    layoutNodesSelector,
     viewportWidthSelector,
     viewportHeightSelector,
-    (_, props) => props.margins.left,
-    (_, props) => props.margins.top,
+    propsMarginsSelector,
   ],
-  (layoutNodes, width, height, marginLeft, marginTop) => {
+  (layoutNodes, width, height, margins) => {
     if (layoutNodes.size === 0) {
       return {};
     }
@@ -48,21 +52,20 @@ const defaultZoomSelector = createSelector(
       scale,
       minScale: scale / 5,
       maxScale: Math.min(width, height) / NODE_BASE_SIZE / 3,
-      panTranslateX: translateX + marginLeft,
-      panTranslateY: translateY + marginTop,
+      panTranslateX: translateX + margins.left,
+      panTranslateY: translateY + margins.top,
     };
   }
 );
 
 export const restoredZoomState = createSelector(
   [
-    (state, props) => state.zoomCache[props.topologyId],
+    cachedZoomStateSelector,
     defaultZoomSelector,
-    (_, props) => props.topologyId,
+    topologyIdSelector,
   ],
   (cachedZoomState, defaultZoomState, topologyId) => {
-    console.log(topologyId);
-    console.log(cachedZoomState);
+    console.log(topologyId, cachedZoomState, defaultZoomState);
     return cachedZoomState || defaultZoomState;
   }
 );

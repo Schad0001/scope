@@ -15,8 +15,7 @@ class NodesChartElements extends React.Component {
           isAnimated={props.isAnimated} />
         <NodesChartNodes
           layoutNodes={props.completeNodes}
-          scale={props.scale}
-          selectedScale={props.selectedScale}
+          focusMagnifyFactor={props.focusMagnifyFactor}
           isAnimated={props.isAnimated} />
       </g>
     );

@@ -11,8 +11,8 @@ const radiusDensity = scaleThreshold()
   .range([2.5, 3.5, 3]);
 
 export function selectedNodeInFocus(props, state) {
-  let stateNodes = state.nodes;
-  let stateEdges = state.edges;
+  let stateNodes = state.layoutNodes;
+  let stateEdges = state.layoutEdges;
   if (!stateNodes.has(props.selectedNodeId)) {
     return {};
   }
@@ -78,7 +78,7 @@ export function selectedNodeInFocus(props, state) {
 
   return {
     selectedScale: 1,
-    edges: stateEdges,
-    nodes: stateNodes
+    layoutEdges: stateEdges,
+    layoutNodes: stateNodes
   };
 }

@@ -41,8 +41,8 @@ class NodesChart extends React.Component {
     super(props, context);
 
     this.state = {
-      nodes: makeMap(),
-      edges: makeMap(),
+      layoutNodes: makeMap(),
+      layoutEdges: makeMap(),
       scale: 0,
       minScale: 0,
       maxScale: 0,
@@ -77,6 +77,15 @@ class NodesChart extends React.Component {
     //   assign(state, emptyLayoutState);
     // }
 
+    if (nextProps.topologyId !== this.props.topologyId) {
+      // saving previous zoom state
+      const prevZoom = pick(state, ZOOM_CACHE_FIELDS);
+      const zoomCache = assign({}, state.zoomCache);
+      zoomCache[this.props.topologyId] = prevZoom;
+      assign(state, { zoomCache });
+      console.log('Cached zoom', prevZoom);
+    }
+
     // reset layout dimensions only when forced
     state.height = nextProps.forceRelayout ? nextProps.height : (state.height || nextProps.height);
     state.width = nextProps.forceRelayout ? nextProps.width : (state.width || nextProps.width);
@@ -98,12 +107,6 @@ class NodesChart extends React.Component {
     // if (nextProps.selectedNodeId) {
     //   assign(state, selectedNodeInFocus(nextProps, state));
     // }
-
-    // saving previous zoom state
-    // const prevZoom = pick(state, ZOOM_CACHE_FIELDS);
-    // const zoomCache = assign({}, state.zoomCache);
-    // zoomCache[this.props.topologyId] = prevZoom;
-    // assign(state, { zoomCache });
 
     this.setZoom(state);
     this.setState(state);
@@ -129,18 +132,17 @@ class NodesChart extends React.Component {
   }
 
   isSmallTopology() {
-    return this.state.nodes.size < 100;
+    return this.state.layoutNodes.size < 100;
   }
 
   render() {
-    const { edges, nodes, panTranslateX, panTranslateY, scale } = this.state;
-
-    // console.log(`Render ${nodes.size}`);
+    const { panTranslateX, panTranslateY, scale, selectedScale } = this.state;
 
     // not passing translates into child components for perf reasons
     const translate = [panTranslateX, panTranslateY];
     const transform = `translate(${translate}) scale(${scale})`;
     const svgClassNames = this.props.isEmpty ? 'hide' : '';
+    const isAnimated = this.isSmallTopology();
 
     return (
       <div className="nodes-chart">
@@ -151,12 +153,11 @@ class NodesChart extends React.Component {
             <Logo />
           </g>
           <NodesChartElements
-            layoutNodes={nodes}
-            layoutEdges={edges}
-            scale={scale}
-            selectedScale={this.state.selectedScale}
+            layoutNodes={this.state.layoutNodes}
+            layoutEdges={this.state.layoutEdges}
+            focusMagnifyFactor={selectedScale / scale}
             transform={transform}
-            isAnimated={this.isSmallTopology()} />
+            isAnimated={isAnimated} />
         </svg>
       </div>
     );
@@ -179,13 +180,13 @@ class NodesChart extends React.Component {
         panTranslateY: d3Event.transform.y,
         scale: d3Event.transform.k
       };
-      const state = assign({}, this.state, newZoom);
-      const zoomCache = assign({}, state.zoomCache);
-      zoomCache[this.props.topologyId] = assign(zoomCache[this.props.topologyId], newZoom);
-      assign(state, { zoomCache });
-      this.setState(state);
+      this.setState(newZoom);
+      // const state = assign({}, this.state, newZoom);
+      // const zoomCache = assign({}, state.zoomCache);
+      // zoomCache[this.props.topologyId] = assign(zoomCache[this.props.topologyId], newZoom);
+      // assign(state, { zoomCache });
+      // this.setState(state);
     }
-    // console.log(d3Event.transform);
   }
 
   setZoom(newZoom) {

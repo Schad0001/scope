@@ -8,31 +8,41 @@ import { doLayout } from '../charts/nodes-layout';
 
 const log = debug('scope:nodes-chart');
 
+const layoutNodesSelector = (state, _) => state.layoutNodes;
+const layoutEdgesSelector = (state, _) => state.layoutEdges;
+const stateWidthSelector = (state, _) => state.width;
+const stateHeightSelector = (state, _) => state.height;
+const inputNodesSelector = (_, props) => props.nodes;
+const propsMarginsSelector = (_, props) => props.margins;
+const forceRelayoutSelector = (_, props) => props.forceRelayout;
+const topologyIdSelector = (_, props) => props.topologyId;
+const topologyOptionsSelector = (_, props) => props.topologyOptions;
+
 
 // Restoring the previous layout
-const restoredNodesSelector = createSelector(
+const restoredLayoutNodesSelector = createSelector(
   [
-    (state, _) => state.nodes,
+    layoutNodesSelector,
   ],
-  nodes => nodes.map(node => node.merge({
+  layoutNodes => layoutNodes.map(node => node.merge({
     x: node.get('px'),
     y: node.get('py'),
   }))
 );
-const restoredEdgesSelector = createSelector(
+const restoredLayoutEdgesSelector = createSelector(
   [
-    (state, _) => state.edges,
+    layoutEdgesSelector,
   ],
-  edges => edges.map(edge =>
+  layoutEdges => layoutEdges.map(edge =>
     (edge.has('ppoints') ? edge.set('points', edge.get('ppoints')) : edge)
   )
 );
 export const restoredLayout = createSelector(
   [
-    restoredNodesSelector,
-    restoredEdgesSelector,
+    restoredLayoutNodesSelector,
+    restoredLayoutEdgesSelector,
   ],
-  (nodes, edges) => ({ nodes, edges })
+  (layoutNodes, layoutEdges) => ({ layoutNodes, layoutEdges })
 );
 
 
@@ -66,25 +76,29 @@ function initEdges(nodes) {
   return edges;
 }
 
-const layoutOptionsSelector = (state, props) => ({
-  width: state.width,
-  height: state.height,
-  margins: props.margins,
-  forceRelayout: props.forceRelayout,
-  topologyId: props.topologyId,
-  topologyOptions: props.topologyOptions,
-});
-
+const layoutOptionsSelector = createSelector(
+  [
+    stateWidthSelector,
+    stateHeightSelector,
+    propsMarginsSelector,
+    forceRelayoutSelector,
+    topologyIdSelector,
+    topologyOptionsSelector,
+  ],
+  (width, height, margins, forceRelayout, topologyId, topologyOptions) => (
+    { width, height, margins, forceRelayout, topologyId, topologyOptions }
+  )
+);
 export const updatedLayout = createSelector(
   [
-    (_, props) => props.nodes,
+    inputNodesSelector,
     layoutOptionsSelector,
   ],
   (nodes, options) => {
     if (nodes.size === 0) {
       return {
-        nodes: makeMap(),
-        edges: makeMap(),
+        layoutNodes: makeMap(),
+        layoutEdges: makeMap(),
       };
     }
 
@@ -103,9 +117,6 @@ export const updatedLayout = createSelector(
 
     const layoutEdges = graph.edges.map(edge => edge.set('ppoints', edge.get('points')));
 
-    return {
-      nodes: layoutNodes,
-      edges: layoutEdges,
-    };
+    return { layoutNodes, layoutEdges };
   }
 );
