@@ -7,19 +7,20 @@ import { NODE_BASE_SIZE, DETAILS_PANEL_WIDTH } from '../constants/styles';
 
 
 const circularOffsetAngle = Math.PI / 4;
+
 // make sure circular layouts a bit denser with 3-6 nodes
 const radiusDensity = scaleThreshold()
   .domain([3, 6])
   .range([2.5, 3.5, 3]);
 
 
-const layoutNodesSelector = (state, _) => state.layoutNodes;
-const layoutEdgesSelector = (state, _) => state.layoutEdges;
-const stateWidthSelector = (state, _) => state.width;
-const stateHeightSelector = (state, _) => state.height;
-const stateScaleSelector = (state, _) => state.zoomScale;
-const stateTranslateXSelector = (state, _) => state.panTranslateX;
-const stateTranslateYSelector = (state, _) => state.panTranslateY;
+const layoutNodesSelector = state => state.layoutNodes;
+const layoutEdgesSelector = state => state.layoutEdges;
+const stateWidthSelector = state => state.width;
+const stateHeightSelector = state => state.height;
+const stateScaleSelector = state => state.zoomScale;
+const stateTranslateXSelector = state => state.panTranslateX;
+const stateTranslateYSelector = state => state.panTranslateY;
 const propsSelectedNodeIdSelector = (_, props) => props.selectedNodeId;
 const propsAdjacentNodesSelector = (_, props) => props.adjacentNodes;
 const propsMarginsSelector = (_, props) => props.margins;
@@ -72,18 +73,29 @@ const selectedNodesLayoutSettingsSelector = createSelector(
   ],
   (circularNodesIds, viewportExpanse, scale) => {
     const circularNodesCount = circularNodesIds.length;
-    const maxMagnified = viewportExpanse / NODE_BASE_SIZE / 3;
-    const shrinkFactor = Math.sqrt(circularNodesCount + 10);
 
-    return {
-      selectedScale: maxMagnified / shrinkFactor / scale,
-      circularRadius: viewportExpanse / radiusDensity(circularNodesCount) / scale,
-      circularInnerAngle: (2 * Math.PI) / circularNodesCount,
-    };
+    // Here we calculate the zoom factor of the nodes that get selected into focus.
+    // The factor is a somewhat arbitrary function (based on what looks good) of the
+    // viewport dimensions and the number of nodes in the circular layout. The idea
+    // is that the node should never be zoomed more than to cover 1/3 of the viewport
+    // (`maxScale`) and then the factor gets decresed asymptotically to the inverse
+    // square of the number of circular nodes, with a little constant push to make
+    // the layout more stable for a small number of nodes. Finally, the zoom factor is
+    // divided by the zoom factor applied to the whole topology layout to cancel it out.
+    const maxScale = viewportExpanse / NODE_BASE_SIZE / 3;
+    const shrinkFactor = Math.sqrt(circularNodesCount + 10);
+    const selectedScale = maxScale / shrinkFactor / scale;
+
+    // Following a similar logic as above, we set the radius of the circular
+    // layout based on the viewport dimensions and the number of circular nodes.
+    const circularRadius = viewportExpanse / radiusDensity(circularNodesCount) / scale;
+    const circularInnerAngle = (2 * Math.PI) / circularNodesCount;
+
+    return { selectedScale, circularRadius, circularInnerAngle };
   }
 );
 
-export const selectedNodeInFocus = createSelector(
+export const layoutWithSelectedNode = createSelector(
   [
     layoutNodesSelector,
     layoutEdgesSelector,
@@ -93,17 +105,17 @@ export const selectedNodeInFocus = createSelector(
     selectedNodesLayoutSettingsSelector,
   ],
   (layoutNodes, layoutEdges, viewportCenter, selectedNodeId, neighborsIds, layoutSettings) => {
-    // Do nothing if there is no selected node or the selected node is not there anymore.
-    if (!selectedNodeId || !layoutNodes.has(selectedNodeId)) {
+    // Do nothing if the layout doesn't contain the selected node anymore.
+    if (!layoutNodes.has(selectedNodeId)) {
       return {};
     }
 
     const { selectedScale, circularRadius, circularInnerAngle } = layoutSettings;
 
-    // fix the selected node in the viewport center
+    // Fix the selected node in the viewport center.
     layoutNodes = layoutNodes.mergeIn([selectedNodeId], viewportCenter);
 
-    // circular layout for adjacent nodes
+    // Put the nodes that are adjacent to the selected one in a circular layout around it.
     layoutNodes = layoutNodes.map((node, nodeId) => {
       const index = neighborsIds.indexOf(nodeId);
       if (index > -1) {
@@ -116,7 +128,7 @@ export const selectedNodeInFocus = createSelector(
       return node;
     });
 
-    // fix all edges for circular nodes
+    // Update the edges in the circular layout to link the nodes in a straight line.
     layoutEdges = layoutEdges.map((edge) => {
       if (edge.get('source') === selectedNodeId
         || edge.get('target') === selectedNodeId

@@ -2,11 +2,10 @@ import { createSelector } from 'reselect';
 import { NODE_BASE_SIZE } from '../constants/styles';
 
 
-const layoutNodesSelector = (state, _) => state.layoutNodes;
-const stateWidthSelector = (state, _) => state.width;
-const stateHeightSelector = (state, _) => state.height;
+const layoutNodesSelector = state => state.layoutNodes;
+const stateWidthSelector = state => state.width;
+const stateHeightSelector = state => state.height;
 const propsMarginsSelector = (_, props) => props.margins;
-const topologyIdSelector = (_, props) => props.topologyId;
 const cachedZoomStateSelector = (state, props) => state.zoomCache[props.topologyId];
 
 const viewportWidthSelector = createSelector(
@@ -24,6 +23,13 @@ const viewportHeightSelector = createSelector(
   (height, margins) => height - margins.top - margins.bottom
 );
 
+// Compute the default zoom settings for the given graph layout
+// that, when applied, put the graph in the center of viewport,
+// with a zoom factor set so that the the graph would cover 80%
+// of the viewport along the dimension in which it spans more.
+// Minimum zoom factor is always set to be 1/5 of that while
+// the maximum zoom is always capped when a node covers 1/3
+// of the viewport.
 const defaultZoomSelector = createSelector(
   [
     layoutNodesSelector,
@@ -60,7 +66,9 @@ const defaultZoomSelector = createSelector(
   }
 );
 
-export const restoredZoomState = createSelector(
+// Use the cache to get the last zoom state for the selected topology,
+// otherwise use the default zoom options computed from the graph layout.
+export const topologyZoomState = createSelector(
   [
     cachedZoomStateSelector,
     defaultZoomSelector,

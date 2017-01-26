@@ -8,10 +8,9 @@ import { doLayout } from '../charts/nodes-layout';
 
 const log = debug('scope:nodes-chart');
 
-const layoutNodesSelector = (state, _) => state.layoutNodes;
-const layoutEdgesSelector = (state, _) => state.layoutEdges;
-const stateWidthSelector = (state, _) => state.width;
-const stateHeightSelector = (state, _) => state.height;
+
+const stateWidthSelector = state => state.width;
+const stateHeightSelector = state => state.height;
 const inputNodesSelector = (_, props) => props.nodes;
 const propsMarginsSelector = (_, props) => props.margins;
 const forceRelayoutSelector = (_, props) => props.forceRelayout;
@@ -19,35 +18,7 @@ const topologyIdSelector = (_, props) => props.topologyId;
 const topologyOptionsSelector = (_, props) => props.topologyOptions;
 
 
-// Restoring the previous layout
-const restoredLayoutNodesSelector = createSelector(
-  [
-    layoutNodesSelector,
-  ],
-  layoutNodes => layoutNodes.map(node => node.merge({
-    x: node.get('px'),
-    y: node.get('py'),
-  }))
-);
-const restoredLayoutEdgesSelector = createSelector(
-  [
-    layoutEdgesSelector,
-  ],
-  layoutEdges => layoutEdges.map(edge =>
-    (edge.has('ppoints') ? edge.set('points', edge.get('ppoints')) : edge)
-  )
-);
-export const restoredLayout = createSelector(
-  [
-    restoredLayoutNodesSelector,
-    restoredLayoutEdgesSelector,
-  ],
-  (layoutNodes, layoutEdges) => ({ layoutNodes, layoutEdges })
-);
-
-
-// Calculating a new layout
-function initEdges(nodes) {
+function initEdgesFromNodes(nodes) {
   let edges = makeMap();
 
   nodes.forEach((node, nodeId) => {
@@ -89,12 +60,14 @@ const layoutOptionsSelector = createSelector(
     { width, height, margins, forceRelayout, topologyId, topologyOptions }
   )
 );
-export const updatedLayout = createSelector(
+
+export const graphLayout = createSelector(
   [
     inputNodesSelector,
     layoutOptionsSelector,
   ],
   (nodes, options) => {
+    // If the graph is empty, skip computing the layout.
     if (nodes.size === 0) {
       return {
         layoutNodes: makeMap(),
@@ -102,20 +75,19 @@ export const updatedLayout = createSelector(
       };
     }
 
-    const edges = initEdges(nodes);
+    const edges = initEdgesFromNodes(nodes);
     const timedLayouter = timely(doLayout);
     const graph = timedLayouter(nodes, edges, options);
-    log(`graph layout took ${timedLayouter.time}ms`);
 
+    // NOTE: We probably shouldn't log anything in a
+    // computed property, but this is still useful.
+    log(`graph layout calculation took ${timedLayouter.time}ms`);
+
+    const layoutEdges = graph.edges;
     const layoutNodes = graph.nodes.map(node => makeMap({
       x: node.get('x'),
       y: node.get('y'),
-      // extract coords and save for restore
-      px: node.get('x'),
-      py: node.get('y')
     }));
-
-    const layoutEdges = graph.edges.map(edge => edge.set('ppoints', edge.get('points')));
 
     return { layoutNodes, layoutEdges };
   }

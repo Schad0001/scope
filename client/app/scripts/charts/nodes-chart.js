@@ -1,10 +1,7 @@
-import debug from 'debug';
 import React from 'react';
 import { connect } from 'react-redux';
-import { assign, pick, includes } from 'lodash';
-import { Map as makeMap, fromJS } from 'immutable';
-import { createSelector } from 'reselect';
-import timely from 'timely';
+import { assign, pick } from 'lodash';
+import { Map as makeMap } from 'immutable';
 
 import { event as d3Event, select } from 'd3-selection';
 import { zoom, zoomIdentity } from 'd3-zoom';
@@ -12,15 +9,14 @@ import { zoom, zoomIdentity } from 'd3-zoom';
 import { nodeAdjacenciesSelector, adjacentNodesSelector } from '../selectors/chartSelectors';
 import { clickBackground } from '../actions/app-actions';
 import Logo from '../components/logo';
-import { doLayout } from './nodes-layout';
 import NodesChartElements from './nodes-chart-elements';
 import { getActiveTopologyOptions } from '../utils/topology-utils';
 
-import { restoredZoomState } from '../selectors/nodes-chart-zoom';
-import { selectedNodeInFocus } from '../selectors/nodes-chart-focus';
-import { updatedLayout, restoredLayout } from '../selectors/nodes-chart-layout';
+import { topologyZoomState } from '../selectors/nodes-chart-zoom';
+import { layoutWithSelectedNode } from '../selectors/nodes-chart-focus';
+import { graphLayout } from '../selectors/nodes-chart-layout';
 
-const log = debug('scope:nodes-chart');
+
 const GRAPH_COMPLEXITY_NODES_TRESHOLD = 100;
 const ZOOM_CACHE_FIELDS = [
   'panTranslateX', 'panTranslateY',
@@ -51,20 +47,30 @@ class NodesChart extends React.Component {
   }
 
   componentWillMount() {
-    this.setState(updatedLayout(this.state, this.props));
+    this.setState(graphLayout(this.state, this.props));
   }
 
   componentWillReceiveProps(nextProps) {
-    // gather state, setState should be called only once here
+    // Don't modify the original state, as we only want to call setState once at the end.
     const state = assign({}, this.state);
 
     // Reset layout dimensions only when forced (to prevent excessive rendering on resizing).
     state.height = nextProps.forceRelayout ? nextProps.height : (state.height || nextProps.height);
     state.width = nextProps.forceRelayout ? nextProps.width : (state.width || nextProps.width);
 
-    assign(state, updatedLayout(state, nextProps));
-    assign(state, restoredZoomState(state, nextProps));
-    assign(state, selectedNodeInFocus(state, nextProps));
+    // Update the state with memoized graph layout information based on props nodes and edges.
+    assign(state, graphLayout(state, nextProps));
+
+    // Now that we have the graph layout information, we use it to create a default zoom
+    // settings for the current topology if we are rendering its layout for the first time, or
+    // otherwise we use the cached zoom information from local state for this topology layout.
+    assign(state, topologyZoomState(state, nextProps));
+
+    // Finally we update the layout state with the circular
+    // subgraph centered around the selected node (if there is one).
+    if (nextProps.selectedNodeId) {
+      assign(state, layoutWithSelectedNode(state, nextProps));
+    }
 
     this.setZoom(state);
     this.setState(state);
@@ -144,14 +150,12 @@ class NodesChart extends React.Component {
         panTranslateY: d3Event.transform.y,
         zoomScale: d3Event.transform.k
       };
+      // Cache the zoom as soon as it changes as this is
+      // cheap, and makes us be able to skip difficult
+      // conditions on when it should be happening.
       let state = assign({}, this.state, newZoomState);
       state = assign(state, this.cacheZoomState(state));
       this.setState(state);
-      // this.setState({
-      //   panTranslateX: d3Event.transform.x,
-      //   panTranslateY: d3Event.transform.y,
-      //   zoomScale: d3Event.transform.k
-      // });
     }
   }
 
