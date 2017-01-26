@@ -1,5 +1,6 @@
 import includes from 'lodash/includes';
 import { fromJS } from 'immutable';
+import { createSelector } from 'reselect';
 import { scaleThreshold } from 'd3-scale';
 
 import { DETAILS_PANEL_WIDTH } from '../constants/styles';
@@ -10,75 +11,100 @@ const radiusDensity = scaleThreshold()
   .domain([3, 6])
   .range([2.5, 3.5, 3]);
 
-export function selectedNodeInFocus(props, state) {
-  let stateNodes = state.layoutNodes;
-  let stateEdges = state.layoutEdges;
-  if (!stateNodes.has(props.selectedNodeId)) {
-    return {};
+
+const layoutNodesSelector = (state, _) => state.layoutNodes;
+const layoutEdgesSelector = (state, _) => state.layoutEdges;
+const stateWidthSelector = (state, _) => state.width;
+const stateHeightSelector = (state, _) => state.height;
+const stateScaleSelector = (state, _) => state.scale;
+const stateTranslateXSelector = (state, _) => state.panTranslateX;
+const stateTranslateYSelector = (state, _) => state.panTranslateY;
+const propsSelectedNodeIdSelector = (_, props) => props.selectedNodeId;
+const propsMarginsSelector = (_, props) => props.margins;
+
+const viewportCenterSelector = createSelector(
+  [
+    stateWidthSelector,
+    stateHeightSelector,
+    stateTranslateXSelector,
+    stateTranslateYSelector,
+    stateScaleSelector,
+    propsMarginsSelector,
+  ],
+  (width, height, translateX, translateY, scale, margins) => {
+    const viewportHalfWidth = ((width + margins.left) - DETAILS_PANEL_WIDTH) / 2;
+    const viewportHalfHeight = (height + margins.top) / 2;
+    return {
+      x: (-translateX + viewportHalfWidth) / scale,
+      y: (-translateY + viewportHalfHeight) / scale,
+    };
   }
+);
 
-  const adjacentNodes = props.adjacentNodes;
-  const adjacentLayoutNodeIds = [];
+export const selectedNodeInFocus = createSelector(
+  [
+    layoutNodesSelector,
+    layoutEdgesSelector,
+    viewportCenterSelector,
+    propsSelectedNodeIdSelector,
+    (_, props) => props.adjacentNodes,
+    stateWidthSelector,
+    stateHeightSelector,
+    stateScaleSelector,
+  ],
+  (layoutNodes, layoutEdges, viewportCenter, selectedNodeId, adjacentNodes, width, height,
+    scale) => {
+    if (!selectedNodeId || !layoutNodes.has(selectedNodeId)) return {};
 
-  adjacentNodes.forEach((adjacentId) => {
-    // filter loopback
-    if (adjacentId !== props.selectedNodeId) {
-      adjacentLayoutNodeIds.push(adjacentId);
-    }
-  });
+    const adjacentLayoutNodeIds = [];
+    adjacentNodes.forEach((adjacentId) => {
+      // filter loopback
+      if (adjacentId !== selectedNodeId) {
+        adjacentLayoutNodeIds.push(adjacentId);
+      }
+    });
 
-  // move origin node to center of viewport
-  const zoomScale = state.scale;
-  const translate = [state.panTranslateX, state.panTranslateY];
-  const viewportHalfWidth = ((state.width + props.margins.left) - DETAILS_PANEL_WIDTH) / 2;
-  const viewportHalfHeight = (state.height + props.margins.top) / 2;
-  const centerX = (-translate[0] + viewportHalfWidth) / zoomScale;
-  const centerY = (-translate[1] + viewportHalfHeight) / zoomScale;
-  stateNodes = stateNodes.mergeIn([props.selectedNodeId], {
-    x: centerX,
-    y: centerY
-  });
+    layoutNodes = layoutNodes.mergeIn([selectedNodeId], viewportCenter);
 
-  // circle layout for adjacent nodes
-  const adjacentCount = adjacentLayoutNodeIds.length;
-  const density = radiusDensity(adjacentCount);
-  const radius = Math.min(state.width, state.height) / density / zoomScale;
-  const offsetAngle = Math.PI / 4;
+    // circle layout for adjacent nodes
+    const adjacentCount = adjacentLayoutNodeIds.length;
+    const density = radiusDensity(adjacentCount);
+    const radius = Math.min(width, height) / density / scale;
+    const innerAngle = (2 * Math.PI) / adjacentCount;
+    const offsetAngle = Math.PI / 4;
 
-  stateNodes = stateNodes.map((node, nodeId) => {
-    const index = adjacentLayoutNodeIds.indexOf(nodeId);
-    if (index > -1) {
-      const angle = offsetAngle + ((Math.PI * 2 * index) / adjacentCount);
-      return node.merge({
-        x: centerX + (radius * Math.sin(angle)),
-        y: centerY + (radius * Math.cos(angle))
-      });
-    }
-    return node;
-  });
+    layoutNodes = layoutNodes.map((node, nodeId) => {
+      const index = adjacentLayoutNodeIds.indexOf(nodeId);
+      if (index > -1) {
+        const angle = offsetAngle + (index * innerAngle);
+        return node.merge({
+          x: viewportCenter.x + (radius * Math.sin(angle)),
+          y: viewportCenter.y + (radius * Math.cos(angle))
+        });
+      }
+      return node;
+    });
 
-  // fix all edges for circular nodes
-  stateEdges = stateEdges.map((edge) => {
-    if (edge.get('source') === props.selectedNodeId
-      || edge.get('target') === props.selectedNodeId
-      || includes(adjacentLayoutNodeIds, edge.get('source'))
-      || includes(adjacentLayoutNodeIds, edge.get('target'))) {
-      const source = stateNodes.get(edge.get('source'));
-      const target = stateNodes.get(edge.get('target'));
-      return edge.set('points', fromJS([
-        {x: source.get('x'), y: source.get('y')},
-        {x: target.get('x'), y: target.get('y')}
-      ]));
-    }
-    return edge;
-  });
+    // fix all edges for circular nodes
+    layoutEdges = layoutEdges.map((edge) => {
+      if (edge.get('source') === selectedNodeId
+        || edge.get('target') === selectedNodeId
+        || includes(adjacentLayoutNodeIds, edge.get('source'))
+        || includes(adjacentLayoutNodeIds, edge.get('target'))) {
+        const source = layoutNodes.get(edge.get('source'));
+        const target = layoutNodes.get(edge.get('target'));
+        return edge.set('points', fromJS([
+          {x: source.get('x'), y: source.get('y')},
+          {x: target.get('x'), y: target.get('y')}
+        ]));
+      }
+      return edge;
+    });
 
-  // auto-scale node size for selected nodes
-  // const selectedNodeScale = getNodeScale(adjacentNodes.size, state.width, state.height);
+    // auto-scale node size for selected nodes
+    // const selectedNodeScale = getNodeScale(adjacentNodes.size, state.width, state.height);
+    const selectedScale = 1;
 
-  return {
-    selectedScale: 1,
-    layoutEdges: stateEdges,
-    layoutNodes: stateNodes
-  };
-}
+    return { layoutNodes, layoutEdges, selectedScale };
+  }
+);

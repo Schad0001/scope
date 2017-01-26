@@ -92,7 +92,7 @@ class NodesChart extends React.Component {
     }
 
     if (nextProps.selectedNodeId) {
-      assign(state, selectedNodeInFocus(nextProps, state));
+      assign(state, selectedNodeInFocus(state, nextProps));
     }
 
     this.setZoom(state);
