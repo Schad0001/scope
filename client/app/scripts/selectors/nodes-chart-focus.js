@@ -1,11 +1,12 @@
-import includes from 'lodash/includes';
+import { includes, without } from 'lodash';
 import { fromJS } from 'immutable';
 import { createSelector } from 'reselect';
 import { scaleThreshold } from 'd3-scale';
 
-import { DETAILS_PANEL_WIDTH } from '../constants/styles';
+import { NODE_BASE_SIZE, DETAILS_PANEL_WIDTH } from '../constants/styles';
 
 
+const circularOffsetAngle = Math.PI / 4;
 // make sure circular layouts a bit denser with 3-6 nodes
 const radiusDensity = scaleThreshold()
   .domain([3, 6])
@@ -20,8 +21,20 @@ const stateScaleSelector = (state, _) => state.scale;
 const stateTranslateXSelector = (state, _) => state.panTranslateX;
 const stateTranslateYSelector = (state, _) => state.panTranslateY;
 const propsSelectedNodeIdSelector = (_, props) => props.selectedNodeId;
+const propsAdjacentNodesSelector = (_, props) => props.adjacentNodes;
 const propsMarginsSelector = (_, props) => props.margins;
 
+// The narrower dimension of the viewport, used for scaling.
+const viewportExpanseSelector = createSelector(
+  [
+    stateWidthSelector,
+    stateHeightSelector,
+  ],
+  (width, height) => Math.min(width, height)
+);
+
+// Coordinates of the viewport center (when the details
+// panel is open), used for focusing the selected node.
 const viewportCenterSelector = createSelector(
   [
     stateWidthSelector,
@@ -41,45 +54,63 @@ const viewportCenterSelector = createSelector(
   }
 );
 
+// List of all the adjacent nodes to the selected
+// one, excluding itself (in case of loops).
+const selectedNodeNeighborsIdsSelector = createSelector(
+  [
+    propsSelectedNodeIdSelector,
+    propsAdjacentNodesSelector,
+  ],
+  (selectedNodeId, adjacentNodes) => without(adjacentNodes.toArray(), selectedNodeId)
+);
+
+const selectedNodesLayoutSettingsSelector = createSelector(
+  [
+    selectedNodeNeighborsIdsSelector,
+    viewportExpanseSelector,
+    stateScaleSelector,
+  ],
+  (circularNodesIds, viewportExpanse, scale) => {
+    const circularNodesCount = circularNodesIds.length;
+    const maxMagnified = viewportExpanse / NODE_BASE_SIZE / 3;
+    const shrinkFactor = Math.sqrt(circularNodesCount + 10);
+
+    return {
+      selectedScale: maxMagnified / shrinkFactor / scale,
+      circularRadius: viewportExpanse / radiusDensity(circularNodesCount) / scale,
+      circularInnerAngle: (2 * Math.PI) / circularNodesCount,
+    };
+  }
+);
+
 export const selectedNodeInFocus = createSelector(
   [
     layoutNodesSelector,
     layoutEdgesSelector,
     viewportCenterSelector,
     propsSelectedNodeIdSelector,
-    (_, props) => props.adjacentNodes,
-    stateWidthSelector,
-    stateHeightSelector,
-    stateScaleSelector,
+    selectedNodeNeighborsIdsSelector,
+    selectedNodesLayoutSettingsSelector,
   ],
-  (layoutNodes, layoutEdges, viewportCenter, selectedNodeId, adjacentNodes, width, height,
-    scale) => {
-    if (!selectedNodeId || !layoutNodes.has(selectedNodeId)) return {};
+  (layoutNodes, layoutEdges, viewportCenter, selectedNodeId, neighborsIds, layoutSettings) => {
+    // Do nothing if there is no selected node or the selected node is not there anymore.
+    if (!selectedNodeId || !layoutNodes.has(selectedNodeId)) {
+      return {};
+    }
 
-    const adjacentLayoutNodeIds = [];
-    adjacentNodes.forEach((adjacentId) => {
-      // filter loopback
-      if (adjacentId !== selectedNodeId) {
-        adjacentLayoutNodeIds.push(adjacentId);
-      }
-    });
+    const { selectedScale, circularRadius, circularInnerAngle } = layoutSettings;
 
+    // fix the selected node in the viewport center
     layoutNodes = layoutNodes.mergeIn([selectedNodeId], viewportCenter);
 
-    // circle layout for adjacent nodes
-    const adjacentCount = adjacentLayoutNodeIds.length;
-    const density = radiusDensity(adjacentCount);
-    const radius = Math.min(width, height) / density / scale;
-    const innerAngle = (2 * Math.PI) / adjacentCount;
-    const offsetAngle = Math.PI / 4;
-
+    // circular layout for adjacent nodes
     layoutNodes = layoutNodes.map((node, nodeId) => {
-      const index = adjacentLayoutNodeIds.indexOf(nodeId);
+      const index = neighborsIds.indexOf(nodeId);
       if (index > -1) {
-        const angle = offsetAngle + (index * innerAngle);
+        const angle = circularOffsetAngle + (index * circularInnerAngle);
         return node.merge({
-          x: viewportCenter.x + (radius * Math.sin(angle)),
-          y: viewportCenter.y + (radius * Math.cos(angle))
+          x: viewportCenter.x + (circularRadius * Math.sin(angle)),
+          y: viewportCenter.y + (circularRadius * Math.cos(angle))
         });
       }
       return node;
@@ -89,8 +120,8 @@ export const selectedNodeInFocus = createSelector(
     layoutEdges = layoutEdges.map((edge) => {
       if (edge.get('source') === selectedNodeId
         || edge.get('target') === selectedNodeId
-        || includes(adjacentLayoutNodeIds, edge.get('source'))
-        || includes(adjacentLayoutNodeIds, edge.get('target'))) {
+        || includes(neighborsIds, edge.get('source'))
+        || includes(neighborsIds, edge.get('target'))) {
         const source = layoutNodes.get(edge.get('source'));
         const target = layoutNodes.get(edge.get('target'));
         return edge.set('points', fromJS([
@@ -100,10 +131,6 @@ export const selectedNodeInFocus = createSelector(
       }
       return edge;
     });
-
-    // auto-scale node size for selected nodes
-    // const selectedNodeScale = getNodeScale(adjacentNodes.size, state.width, state.height);
-    const selectedScale = 1;
 
     return { layoutNodes, layoutEdges, selectedScale };
   }

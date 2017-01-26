@@ -8,7 +8,7 @@ import NodeContainer from './node-container';
 class NodesChartNodes extends React.Component {
   render() {
     const { adjacentNodes, highlightedNodeIds, layoutNodes, isAnimated, mouseOverNodeId,
-      focusMagnifyFactor, searchQuery, selectedMetric, selectedNetwork, selectedNodeId,
+      selectedScale, searchQuery, selectedMetric, selectedNetwork, selectedNodeId,
       topCardNode, searchNodeMatches = makeMap() } = this.props;
 
     // highlighter functions
@@ -71,7 +71,7 @@ class NodesChartNodes extends React.Component {
           metric={metric(node)}
           rank={node.get('rank')}
           isAnimated={isAnimated}
-          magnified={node.get('focused') ? focusMagnifyFactor : 1}
+          magnified={node.get('focused') ? selectedScale : 1}
           dx={node.get('x')}
           dy={node.get('y')}
         />)}

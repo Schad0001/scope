@@ -50,50 +50,30 @@ class NodesChart extends React.Component {
     this.setState(updatedLayout(this.state, this.props));
   }
 
-  // shouldComponentUpdate(nextProps) {
-  //   return !(this.props.forceRelayout && !nextProps.forceRelayout);
-  // }
-
   componentWillReceiveProps(nextProps) {
+    const topologyChanged = nextProps.topologyId !== this.props.topologyId;
+    const nodeSelectionChanged = nextProps.selectedNodeId !== this.props.selectedNodeId;
+
     // gather state, setState should be called only once here
     const state = assign({}, this.state);
 
-    // const topologyChanged = nextProps.topologyId !== this.props.topologyId;
-
-    // wipe node states when showing different topology
-    // if (topologyChanged) {
-    //   assign(state, emptyLayoutState);
-    // }
-
-    if (nextProps.topologyId !== this.props.topologyId ||
-      this.props.selectedNodeId !== nextProps.selectedNodeId) {
-      // saving previous zoom state
-      const prevZoom = pick(state, ZOOM_CACHE_FIELDS);
-      const zoomCache = assign({}, state.zoomCache);
-      zoomCache[this.props.topologyId] = prevZoom;
-      assign(state, { zoomCache });
-      // console.log('Cached zoom', prevZoom);
+    // saving previous zoom state
+    if (topologyChanged || nodeSelectionChanged) {
+      assign(state, this.cacheZoomState(state));
     }
 
-    // reset layout dimensions only when forced
+    // Reset layout dimensions only when forced (to prevent excessive rendering on resizing).
     state.height = nextProps.forceRelayout ? nextProps.height : (state.height || nextProps.height);
     state.width = nextProps.forceRelayout ? nextProps.width : (state.width || nextProps.width);
 
-    // if (nextProps.forceRelayout || nextProps.nodes !== this.props.nodes) {
     assign(state, updatedLayout(state, nextProps));
-    // }
-
-    // if (nextProps.nodes.size > 0) {
     assign(state, restoredZoomState(state, nextProps));
+
+    // if (nodeSelectionChanged) {
+    //   assign(state, restoredLayout(state));
     // }
 
-    if (this.props.selectedNodeId !== nextProps.selectedNodeId) {
-      assign(state, restoredLayout(state));
-    }
-
-    if (nextProps.selectedNodeId) {
-      assign(state, selectedNodeInFocus(state, nextProps));
-    }
+    assign(state, selectedNodeInFocus(state, nextProps));
 
     this.setZoom(state);
     this.setState(state);
@@ -118,18 +98,18 @@ class NodesChart extends React.Component {
       .on('touchstart.zoom', null);
   }
 
-  isSmallTopology() {
-    return this.state.layoutNodes.size < 100;
+  isTopologyGraphComplex() {
+    return this.state.layoutNodes.size > 100;
   }
 
   render() {
-    const { panTranslateX, panTranslateY, scale, selectedScale } = this.state;
+    const { panTranslateX, panTranslateY, scale } = this.state;
 
-    // not passing translates into child components for perf reasons
+    // Not passing translates into child components for perf reasons.
     const translate = [panTranslateX, panTranslateY];
     const transform = `translate(${translate}) scale(${scale})`;
     const svgClassNames = this.props.isEmpty ? 'hide' : '';
-    const isAnimated = this.isSmallTopology();
+    const isAnimated = !this.isTopologyGraphComplex();
 
     return (
       <div className="nodes-chart">
@@ -142,7 +122,7 @@ class NodesChart extends React.Component {
           <NodesChartElements
             layoutNodes={this.state.layoutNodes}
             layoutEdges={this.state.layoutEdges}
-            focusMagnifyFactor={selectedScale / scale}
+            selectedScale={this.state.selectedScale}
             transform={transform}
             isAnimated={isAnimated} />
         </svg>
@@ -156,6 +136,13 @@ class NodesChart extends React.Component {
     } else {
       this.isZooming = false;
     }
+  }
+
+  cacheZoomState(state) {
+    const zoomState = pick(state, ZOOM_CACHE_FIELDS);
+    const zoomCache = assign({}, state.zoomCache);
+    zoomCache[this.props.topologyId] = zoomState;
+    return { zoomCache };
   }
 
   zoomed() {
