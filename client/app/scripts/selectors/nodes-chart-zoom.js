@@ -20,16 +20,10 @@ const viewportHeightSelector = createSelector(
     stateHeightSelector,
     propsMarginsSelector,
   ],
-  (height, margins) => height - margins.top - margins.bottom
+  (height, margins) => height - margins.top
 );
 
-// Compute the default zoom settings for the given graph layout
-// that, when applied, put the graph in the center of viewport,
-// with a zoom factor set so that the the graph would cover 80%
-// of the viewport along the dimension in which it spans more.
-// Minimum zoom factor is always set to be 1/5 of that while
-// the maximum zoom is always capped when a node covers 1/3
-// of the viewport.
+// Compute the default zoom settings for the given graph layout.
 const defaultZoomSelector = createSelector(
   [
     layoutNodesSelector,
@@ -50,19 +44,21 @@ const defaultZoomSelector = createSelector(
     const xFactor = width / (xMax - xMin);
     const yFactor = height / (yMax - yMin);
 
-    const maxZoomScale = Math.min(width, height) / NODE_BASE_SIZE / 3;
-    const zoomScale = Math.min(xFactor, yFactor, maxZoomScale) * 0.8;
+    // Maximal allowed zoom will always be such that a node covers 1/5 of the viewport.
+    const maxZoomScale = Math.min(width, height) / NODE_BASE_SIZE / 5;
 
-    const translateX = (width - ((xMax + xMin) * zoomScale)) / 2;
-    const translateY = (height - ((yMax + yMin) * zoomScale)) / 2;
+    // Initial zoom is such that the graph covers 90% of either
+    // the viewport, respecting the maximal zoom constraint.
+    const zoomScale = Math.min(xFactor, yFactor, maxZoomScale) * 0.9;
 
-    return {
-      zoomScale,
-      maxZoomScale,
-      minZoomScale: zoomScale / 5,
-      panTranslateX: translateX + margins.left,
-      panTranslateY: translateY + margins.top,
-    };
+    // Finally, we always allow zooming out exactly 5x compared to the initial zoom.
+    const minZoomScale = zoomScale / 5;
+
+    // This translation puts the graph in the center of the viewport, respecting the margins.
+    const panTranslateX = ((width - ((xMax + xMin) * zoomScale)) / 2) + margins.left;
+    const panTranslateY = ((height - ((yMax + yMin) * zoomScale)) / 2) + margins.top;
+
+    return { zoomScale, minZoomScale, maxZoomScale, panTranslateX, panTranslateY };
   }
 );
 

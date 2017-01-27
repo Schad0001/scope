@@ -59,7 +59,6 @@ $node-labels-max-width: 100px;
 $edge-highlight-opacity: 0.1;
 $edge-opacity-blurred: 0.2;
 $edge-opacity: 0.5;
-$edge-link-stroke-width: 0.5;
 
 $btn-opacity-default: 0.7;
 $btn-opacity-hover: 1;
@@ -481,15 +480,13 @@ $label-background-color: fade-out($background-average-color, .3);
     }
 
     .link {
-      stroke: $text-secondary-color;
-      stroke-width: $edge-link-stroke-width;
       fill: none;
+      stroke: $text-secondary-color;
       stroke-opacity: $edge-opacity;
     }
     .shadow {
-      stroke: $weave-blue;
-      stroke-width: 10 * $edge-link-stroke-width;
       fill: none;
+      stroke: $weave-blue;
       stroke-opacity: 0;
     }
     &.highlighted {

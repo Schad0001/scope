@@ -39,6 +39,10 @@ class NodesChart extends React.Component {
       selectedScale: 1,
       height: props.height || 0,
       width: props.width || 0,
+      // TODO: Move zoomCache to global Redux state. Now that we store
+      // it here, it gets reset every time the component gets destroyed.
+      // That happens e.g. when we switch to a grid mode in one topology,
+      // which resets the zoom cache across all topologies, which is bad.
       zoomCache: {},
     };
 
@@ -48,6 +52,25 @@ class NodesChart extends React.Component {
 
   componentWillMount() {
     this.setState(graphLayout(this.state, this.props));
+  }
+
+  componentDidMount() {
+    // distinguish pan/zoom from click
+    this.isZooming = false;
+    this.zoom = zoom().on('zoom', this.zoomed);
+
+    this.svg = select('.nodes-chart svg');
+    this.svg.call(this.zoom);
+  }
+
+  componentWillUnmount() {
+    // undoing .call(zoom)
+    this.svg
+      .on('mousedown.zoom', null)
+      .on('onwheel', null)
+      .on('onmousewheel', null)
+      .on('dblclick.zoom', null)
+      .on('touchstart.zoom', null);
   }
 
   componentWillReceiveProps(nextProps) {
@@ -72,31 +95,8 @@ class NodesChart extends React.Component {
       assign(state, layoutWithSelectedNode(state, nextProps));
     }
 
-    this.setZoom(state);
+    this.applyZoomState(state);
     this.setState(state);
-  }
-
-  componentDidMount() {
-    // distinguish pan/zoom from click
-    this.isZooming = false;
-    this.zoom = zoom().on('zoom', this.zoomed);
-
-    this.svg = select('.nodes-chart svg');
-    this.svg.call(this.zoom);
-  }
-
-  componentWillUnmount() {
-    // undoing .call(zoom)
-    this.svg
-      .on('mousedown.zoom', null)
-      .on('onwheel', null)
-      .on('onmousewheel', null)
-      .on('dblclick.zoom', null)
-      .on('touchstart.zoom', null);
-  }
-
-  isTopologyGraphComplex() {
-    return this.state.layoutNodes.size > GRAPH_COMPLEXITY_NODES_TRESHOLD;
   }
 
   render() {
@@ -134,6 +134,10 @@ class NodesChart extends React.Component {
     }
   }
 
+  isTopologyGraphComplex() {
+    return this.state.layoutNodes.size > GRAPH_COMPLEXITY_NODES_TRESHOLD;
+  }
+
   cacheZoomState(state) {
     const zoomState = pick(state, ZOOM_CACHE_FIELDS);
     const zoomCache = assign({}, state.zoomCache);
@@ -141,29 +145,27 @@ class NodesChart extends React.Component {
     return { zoomCache };
   }
 
+  applyZoomState({ zoomScale, minZoomScale, maxZoomScale, panTranslateX, panTranslateY }) {
+    this.zoom = this.zoom.scaleExtent([minZoomScale, maxZoomScale]);
+    this.svg.call(this.zoom.transform, zoomIdentity
+      .translate(panTranslateX, panTranslateY)
+      .scale(zoomScale));
+  }
+
   zoomed() {
     this.isZooming = true;
     // don't pan while node is selected
     if (!this.props.selectedNodeId) {
-      const newZoomState = {
+      let state = assign({}, this.state, {
         panTranslateX: d3Event.transform.x,
         panTranslateY: d3Event.transform.y,
         zoomScale: d3Event.transform.k
-      };
-      // Cache the zoom as soon as it changes as this is
-      // cheap, and makes us be able to skip difficult
-      // conditions on when it should be happening.
-      let state = assign({}, this.state, newZoomState);
+      });
+      // Cache the zoom state as soon as it changes as it is cheap, and makes us
+      // be able to skip difficult conditions on when this caching should happen.
       state = assign(state, this.cacheZoomState(state));
       this.setState(state);
     }
-  }
-
-  setZoom(newZoom) {
-    this.zoom = this.zoom.scaleExtent([newZoom.minZoomScale, newZoom.maxZoomScale]);
-    this.svg.call(this.zoom.transform, zoomIdentity
-      .translate(newZoom.panTranslateX, newZoom.panTranslateY)
-      .scale(newZoom.zoomScale));
   }
 }
 
